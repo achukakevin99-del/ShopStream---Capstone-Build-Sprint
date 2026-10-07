@@ -1,0 +1,94 @@
+// Paste into https://dbdiagram.io  (Import -> DBML)
+Project shopstream {
+  database_type: 'PostgreSQL'
+  Note: 'ShopStream multi-tenant e-commerce'
+}
+
+Table tenants {
+  id bigint [pk, increment]
+  name text [not null]
+  slug text [not null, unique]
+  currency char(3) [not null, default: 'KES']
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table users {
+  id bigint [pk, increment]
+  tenant_id bigint [not null, ref: > tenants.id]
+  email text [not null]
+  password_hash text [not null, note: 'bcrypt via pgcrypto']
+  full_name text [not null]
+  role text [not null, note: 'owner | staff | customer']
+  created_at timestamptz [not null, default: `now()`]
+  indexes { (tenant_id, email) [unique] (tenant_id, id) [unique] }
+}
+
+Table categories {
+  id bigint [pk, increment]
+  tenant_id bigint [not null, ref: > tenants.id]
+  parent_id bigint [note: 'self reference, same tenant']
+  name text [not null]
+  indexes { (tenant_id, id) [unique] (tenant_id, name) [unique] }
+}
+Ref: categories.(tenant_id, parent_id) > categories.(tenant_id, id)
+
+Table products {
+  id bigint [pk, increment]
+  tenant_id bigint [not null, ref: > tenants.id]
+  category_id bigint
+  sku text [not null]
+  name text [not null]
+  description text
+  price_cents integer [not null, note: '>= 0']
+  stock integer [not null, note: '>= 0']
+  active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  indexes { (tenant_id, sku) [unique] (tenant_id, id) [unique] }
+}
+Ref: products.(tenant_id, category_id) > categories.(tenant_id, id)
+
+Table orders {
+  id bigint [pk, increment]
+  tenant_id bigint [not null, ref: > tenants.id]
+  user_id bigint [not null]
+  status text [not null, note: 'pending|paid|shipped|delivered|cancelled']
+  total_cents bigint [not null, default: 0]
+  placed_at timestamptz [not null, default: `now()`]
+  indexes { (tenant_id, id) [unique] }
+}
+Ref: orders.(tenant_id, user_id) > users.(tenant_id, id)
+
+Table order_items {
+  id bigint [pk, increment]
+  tenant_id bigint [not null, ref: > tenants.id]
+  order_id bigint [not null]
+  product_id bigint [not null]
+  quantity integer [not null, note: '> 0']
+  unit_price_cents integer [not null, note: 'price snapshot at purchase']
+}
+Ref: order_items.(tenant_id, order_id) > orders.(tenant_id, id) [delete: cascade]
+Ref: order_items.(tenant_id, product_id) > products.(tenant_id, id)
+
+Table payments {
+  id bigint [pk, increment]
+  tenant_id bigint [not null, ref: > tenants.id]
+  order_id bigint [not null]
+  method text [not null, note: 'card | mpesa | cash']
+  status text [not null, note: 'pending|paid|failed|refunded']
+  amount_cents bigint [not null]
+  provider_ref text [note: 'gateway token only']
+  paid_at timestamptz
+}
+Ref: payments.(tenant_id, order_id) > orders.(tenant_id, id)
+
+Table audit_log {
+  id bigint [pk, increment]
+  tenant_id bigint
+  table_name text [not null]
+  record_id bigint
+  action text [not null, note: 'INSERT|UPDATE|DELETE']
+  old_data jsonb
+  new_data jsonb
+  changed_by bigint [note: 'app.user_id session setting']
+  changed_at timestamptz [not null, default: `now()`]
+}

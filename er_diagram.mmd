@@ -1,0 +1,65 @@
+%% Renders on GitHub, in VS Code (Mermaid preview) or at https://mermaid.live
+erDiagram
+    TENANTS ||--o{ USERS : "employs / serves (1:N)"
+    TENANTS ||--o{ CATEGORIES : "owns (1:N)"
+    TENANTS ||--o{ PRODUCTS : "owns (1:N)"
+    TENANTS ||--o{ ORDERS : "receives (1:N)"
+    CATEGORIES ||--o{ CATEGORIES : "parent of (1:N, optional)"
+    CATEGORIES |o--o{ PRODUCTS : "classifies (0..1 : N)"
+    USERS ||--o{ ORDERS : "places (1:N)"
+    ORDERS ||--|{ ORDER_ITEMS : "contains (1:1..N)"
+    PRODUCTS ||--o{ ORDER_ITEMS : "sold as (1:N)"
+    ORDERS ||--o{ PAYMENTS : "settled by (1:0..N)"
+    TENANTS ||--o{ AUDIT_LOG : "scopes (1:N)"
+
+    TENANTS { bigint id PK
+              text name
+              text slug UK
+              char3 currency
+              timestamptz created_at }
+    USERS { bigint id PK
+            bigint tenant_id FK
+            text email "UK with tenant_id"
+            text password_hash
+            text full_name
+            text role "owner|staff|customer" }
+    CATEGORIES { bigint id PK
+                 bigint tenant_id FK
+                 bigint parent_id FK
+                 text name }
+    PRODUCTS { bigint id PK
+               bigint tenant_id FK
+               bigint category_id FK
+               text sku "UK with tenant_id"
+               text name
+               int price_cents
+               int stock
+               bool active }
+    ORDERS { bigint id PK
+             bigint tenant_id FK
+             bigint user_id FK
+             text status
+             bigint total_cents
+             timestamptz placed_at }
+    ORDER_ITEMS { bigint id PK
+                  bigint tenant_id FK
+                  bigint order_id FK
+                  bigint product_id FK
+                  int quantity
+                  int unit_price_cents }
+    PAYMENTS { bigint id PK
+               bigint tenant_id FK
+               bigint order_id FK
+               text method
+               text status
+               bigint amount_cents
+               text provider_ref }
+    AUDIT_LOG { bigint id PK
+                bigint tenant_id
+                text table_name
+                bigint record_id
+                text action
+                jsonb old_data
+                jsonb new_data
+                bigint changed_by
+                timestamptz changed_at }
